@@ -40,7 +40,8 @@ class MIWindow:
         ttk.Entry(options, textvariable=self.duration, width=8).pack(side="left", padx=6)
         self.run_button = ttk.Button(frame, text="Calculate MI", command=self.run)
         self.run_button.grid(row=4, column=1, sticky="e")
-        ttk.Label(frame, textvariable=self.status).grid(row=5, column=0, columnspan=2, sticky="w", pady=(0, 8))
+        ttk.Label(frame, textvariable=self.status, wraplength=820,
+                  justify="left").grid(row=5, column=0, columnspan=2, sticky="w", pady=(0, 8))
 
         results = ttk.LabelFrame(frame, text="MI result", padding=10)
         results.grid(row=6, column=0, columnspan=2, sticky="nsew")
@@ -89,6 +90,9 @@ class MIWindow:
             messagebox.showerror("Input error", str(exc))
             return
         self.run_button.configure(state="disabled")
+        self.rows = []
+        self.channel_box["values"] = []
+        self.draw()
         self.status.set("Starting analysis…")
 
         def worker():
@@ -99,7 +103,7 @@ class MIWindow:
                                     progress=lambda message: self.events.put(("status", message)))
                 self.events.put(("done", info))
             except Exception as exc:
-                self.events.put(("error", str(exc)))
+                self.events.put(("error", f"{type(exc).__name__}: {exc}"))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -111,7 +115,7 @@ class MIWindow:
                     self.status.set(value)
                 elif kind == "error":
                     self.run_button.configure(state="normal")
-                    self.status.set("Analysis failed")
+                    self.status.set(f"Analysis failed: {value}")
                     messagebox.showerror("Analysis error", value)
                 elif kind == "done":
                     self.run_button.configure(state="normal")

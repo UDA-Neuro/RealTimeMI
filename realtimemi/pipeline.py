@@ -63,7 +63,20 @@ def analyze_besa(
         raise ValueError("Select an existing .besa or .npz file")
     if workers < 1:
         raise ValueError("workers must be positive")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    probe = output_dir / f".realtimemi-write-test-{uuid4().hex}.tmp"
+    created = False
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        with probe.open("x", encoding="utf-8") as check:
+            created = True
+            check.write("ok")
+    except OSError as exc:
+        raise PermissionError(
+            f"Cannot write results to {output_dir}. Choose another results folder."
+        ) from exc
+    finally:
+        if created:
+            probe.unlink(missing_ok=True)
     notify = progress or (lambda message: None)
     started = time.perf_counter()
     if start_seconds < 0 or duration_seconds < 30:

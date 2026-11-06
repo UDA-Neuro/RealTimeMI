@@ -45,6 +45,11 @@ channel quality and validate against an independent export before using its
 results for consequential clinical decisions. Never add patient recordings or
 generated analysis files to the public repository.
 
+If the GUI reports `Cannot write results`, choose a results folder where the
+current user can create files. The program checks this before reading the
+recording and shows the full error in the GUI. Results from a previous run
+are cleared when a new run starts.
+
 ## First release target
 
 Process each five-minute recording after it ends and return results within
