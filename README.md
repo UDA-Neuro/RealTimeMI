@@ -16,6 +16,10 @@ python -m pip install ".[gpu]"
 python -m realtimemi
 ```
 
+On Windows, you can also double-click `Start-RealTimeMI.cmd` in the repository
+folder. It uses the local `build/venv` environment when available, or a Python
+3.12 installation with RealTimeMI installed.
+
 The GUI lets you choose a complete `.besa` file or the supplied `.npz` demo
 and an output folder, runs
 the default first five-minute segment, plots MI for a selected channel, and
