@@ -124,13 +124,14 @@ def analyze_besa(
         for window, row in zip(windows, mi):
             writer.writerow([f"{window[0]:g}", f"{window[1]:g}"] +
                             ["nan" if not np.isfinite(x) else f"{x:.17g}" for x in row])
-    saved = time.perf_counter()
+    csv_saved = time.perf_counter()
     gpu_name = cp.cuda.runtime.getDeviceProperties(cp.cuda.Device().id)["name"]
     if isinstance(gpu_name, bytes):
         gpu_name = gpu_name.decode(errors="replace")
     info = {
         "software": "RealTimeMI", "version": __version__, "run_id": run_id,
         "source_bytes": source.stat().st_size,
+        "source_modified_ns": source.stat().st_mtime_ns,
         "source_sha256": _sha256(source) if hash_input else None,
         "source_sampling_hz": rate, "source_channels": channels,
         "input_type": input_type,
@@ -148,9 +149,11 @@ def analyze_besa(
         "native_decoder": native is not None,
         "elapsed_s": {"decode_and_resample": round(decoded - started, 3),
                       "gpu_mi": round(computed - decoded, 3),
-                      "csv_save": round(saved - computed, 3),
-                      "result_ready": round(saved - started, 3)},
+                      "csv_save": round(csv_saved - computed, 3),
+                      "result_ready": None},
     }
+    json_path.write_text(json.dumps(info, indent=2), encoding="utf-8")
+    info["elapsed_s"]["result_ready"] = round(time.perf_counter() - started, 3)
     json_path.write_text(json.dumps(info, indent=2), encoding="utf-8")
     info["csv_path"] = str(csv_path)
     info["metadata_path"] = str(json_path)

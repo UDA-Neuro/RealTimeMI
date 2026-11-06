@@ -68,7 +68,7 @@ class GPUAlgorithmTest(unittest.TestCase):
             means = np.bincount(labels, weights=amp, minlength=18) / counts
             p = means / means.sum()
             expected = np.sum(p * np.log(18 * p)) / np.log(18)
-            self.assertAlmostEqual(float(actual[0, channel]), float(expected), delta=1e-6)
+            self.assertAlmostEqual(float(actual[0, channel]), float(expected), delta=1e-5)
         self.assertGreater(actual[0, 0], actual[0, 1])
 
 

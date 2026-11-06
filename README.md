@@ -63,6 +63,34 @@ repeated at least three times, with each run under 30 seconds. Verify the
 decoded signal and MI against an independent export/reference before treating
 the result as scientifically validated.
 
+To repeat the standalone timing test on a local recording:
+
+```powershell
+python offline/benchmark_python_standalone.py --input 'PATH_TO_RECORDING.besa' --repeats 3
+```
+
+The script writes `build/python-benchmark/benchmark.json` and the individual
+MI results locally. Add `--reference PATH_TO_REFERENCE_MI.csv` to compare
+finite values and the maximum absolute difference with a headerless MATLAB
+reference CSV. No recording is uploaded by this command.
+
+## Python standalone benchmark
+
+On one local 10 kHz BESA recording (132 channels, first five minutes) using an
+NVIDIA RTX A500 Laptop GPU, three complete Python runs took 15.721, 14.817,
+and 23.246 seconds from decoding through CSV and JSON output. A separate
+new-process CLI run took 16.632 seconds wall clock. Each run produced
+19 windows and 2,506 finite MI values; the other two values were undefined.
+All three Python result matrices matched exactly, including NaN positions.
+
+The MATLAB reference produced the same finite-value mask. Among finite MI
+values, the median absolute difference was 3.95e-17, the 95th percentile was
+2.27e-4, and the maximum was 0.00386. The reason for the larger differences
+in selected channels has not been established. These are performance and
+cross-implementation checks on one recording, not validation against an
+independent BESA waveform export. The benchmark starts from a finalized file;
+file finalization and GUI rendering are outside the timed interval.
+
 ## BESA pilot benchmark
 
 On the local 10 kHz, 132-channel research recording, the first five minutes
