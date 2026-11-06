@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "realtimemi"
+version = "0.1.0"
+description = "Local BESA ECoG modulation-index analysis"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["numpy>=2.0,<2.6", "scipy>=1.13,<2"]
+license = {text = "MIT"}
+
+[project.optional-dependencies]
+gpu = ["cupy-cuda12x[ctk]>=14,<15"]
+
+[project.scripts]
+realtimemi = "realtimemi.__main__:main"
+
+[tool.setuptools]
+packages = ["realtimemi", "offline"]
+
+[tool.setuptools.package-data]
+realtimemi = ["native/*.dll"]
