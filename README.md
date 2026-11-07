@@ -23,7 +23,15 @@ folder. It uses the local `build/venv` environment when available, or a Python
 The GUI lets you choose a complete `.besa` file or the supplied `.npz` demo
 and an output folder, runs
 the default first five-minute segment, plots MI for a selected channel, and
-writes timestamped `mi-*.csv` and `mi-*.json` files. For command-line use:
+writes timestamped `mi-*.csv` and `mi-*.json` files.
+
+For BESA input, the channel menu shows the labels stored in the recording,
+such as `5: A1`. The JSON includes `channel_labels` in the same order as the
+numbered `channel_001`, `channel_002`, ... columns in the CSV. The labels do
+not establish anatomical electrode locations; verify any grid or depth
+electrode layout against the acquisition records.
+
+For command-line use:
 
 ```powershell
 python -m realtimemi --input 'D:\data\recording.besa' --output-dir 'D:\results'

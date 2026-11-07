@@ -17,7 +17,7 @@ import numpy as np
 import scipy
 from scipy.signal import firwin, freqz
 
-from offline.besa_reader import metadata, read_resampled_parallel
+from offline.besa_reader import channel_labels, metadata, read_resampled_parallel
 from realtimemi import __version__
 from realtimemi.mi import modulation_index_gpu
 
@@ -84,6 +84,7 @@ def analyze_besa(
     if source.suffix.lower() == ".besa":
         with source.open("rb") as stream:
             rate, total_samples, channels, _ = metadata(stream)
+            labels = channel_labels(stream)
         if rate != 10_000:
             raise ValueError(f"This release supports 10 kHz BESA input; file is {rate:g} Hz")
         if round((start_seconds + duration_seconds) * rate) > total_samples:
@@ -118,6 +119,7 @@ def analyze_besa(
                 raise ValueError("Requested segment extends past the NPZ recording")
             channels = full.shape[1]
             eeg = np.ascontiguousarray(full[first:last])
+            labels = [f"channel_{i + 1:03d}" for i in range(channels)]
         resampling = None
         native = None
         input_type = "NPZ"
@@ -147,6 +149,7 @@ def analyze_besa(
         "source_modified_ns": source.stat().st_mtime_ns,
         "source_sha256": _sha256(source) if hash_input else None,
         "source_sampling_hz": rate, "source_channels": channels,
+        "channel_labels": labels,
         "input_type": input_type,
         "segment_start_s": start_seconds, "segment_duration_s": duration_seconds,
         "resampling": resampling,

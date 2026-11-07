@@ -46,7 +46,7 @@ class MIWindow:
         results = ttk.LabelFrame(frame, text="MI result", padding=10)
         results.grid(row=6, column=0, columnspan=2, sticky="nsew")
         ttk.Label(results, text="Channel").grid(row=0, column=0, sticky="w")
-        self.channel_box = ttk.Combobox(results, textvariable=self.channel, width=9, state="readonly")
+        self.channel_box = ttk.Combobox(results, textvariable=self.channel, width=18, state="readonly")
         self.channel_box.grid(row=0, column=1, sticky="w", padx=8)
         self.channel_box.bind("<<ComboboxSelected>>", lambda _: self.draw())
         self.canvas = tk.Canvas(results, height=260, background="white", highlightthickness=1,
@@ -122,8 +122,9 @@ class MIWindow:
                     self.status.set(f"Done in {value['elapsed_s']['result_ready']:.2f} s — {value['csv_path']}")
                     with open(value["csv_path"], newline="", encoding="utf-8") as stream:
                         self.rows = list(csv.reader(stream))[1:]
-                    self.channel_box["values"] = [str(i) for i in range(1, value["source_channels"] + 1)]
-                    self.channel.set("1")
+                    labels = value.get("channel_labels") or [str(i) for i in range(1, value["source_channels"] + 1)]
+                    self.channel_box["values"] = [f"{i}: {label}" for i, label in enumerate(labels, 1)]
+                    self.channel.set(self.channel_box["values"][0])
                     self.draw()
         except queue.Empty:
             pass
@@ -135,7 +136,7 @@ class MIWindow:
             self.table.delete(item)
         if not self.rows:
             return
-        column = int(self.channel.get()) + 1
+        column = int(self.channel.get().split(":", 1)[0]) + 1
         points = []
         for row in self.rows:
             value = float(row[column])

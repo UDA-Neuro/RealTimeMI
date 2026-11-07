@@ -1,12 +1,14 @@
 """Focused numerical checks for the standalone pipeline."""
 
 import unittest
+import io
+import struct
 from pathlib import Path
 
 import numpy as np
 from scipy.signal import fftconvolve
 
-from offline.besa_reader import _decode_packed
+from offline.besa_reader import _decode_packed, channel_labels
 from realtimemi.mi import modulation_index_gpu
 
 
@@ -16,6 +18,20 @@ class PackedDecoderTest(unittest.TestCase):
         payload = b"\x0a\x00\x02\x00" + bytes([7 * 15 + 7, 8 * 15 + 6, 254, 0xFD])
         np.testing.assert_array_equal(_decode_packed(payload, 1, 7, False),
                                       [10, 2, 0, 0, 1, -1, -3])
+
+
+class ChannelLabelTest(unittest.TestCase):
+    def test_labels_follow_channel_index_not_tag_order(self):
+        def tag(name, value):
+            return struct.pack("<4sI", name, len(value)) + value
+
+        header_payload = tag(b"OFBI", struct.pack("<Q", 64))
+        header = tag(b"BCF1", header_payload)
+        calibration = b"\x00" * 8 + tag(b"CHNR", struct.pack("<H", 3))
+        for index, label in ((2, "B1"), (0, "DC01"), (1, "A1")):
+            calibration += tag(b"CHLA", struct.pack("<H", index) + label.encode("utf-16le"))
+        recording = io.BytesIO(header.ljust(64, b"\x00") + tag(b"BCAL", calibration))
+        self.assertEqual(channel_labels(recording), ["DC01", "A1", "B1"])
 
 
 class DemoDataTest(unittest.TestCase):

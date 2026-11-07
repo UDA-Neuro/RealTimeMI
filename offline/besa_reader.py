@@ -73,6 +73,29 @@ def metadata(file):
     return rate, samples, channels, blocks
 
 
+def channel_labels(file) -> list[str]:
+    """Return channel labels in data order from the BESA BCAL/CHLA tags."""
+    header = dict(_tagged(_block(file, 0, b"BCF1")))
+    cal = _block(file, struct.unpack("<Q", header[b"OFBI"])[0], b"BCAL")
+    fields = list(_tagged(cal, 8))
+    channel_count = int.from_bytes(next(value for tag, value in fields if tag == b"CHNR"), "little")
+    labels: list[str | None] = [None] * channel_count
+    for tag, value in fields:
+        if tag != b"CHLA":
+            continue
+        if len(value) < 4 or len(value) % 2:
+            raise ValueError("Malformed BESA channel label")
+        index = struct.unpack_from("<H", value)[0]
+        if index >= channel_count or labels[index] is not None:
+            raise ValueError("Duplicate or out-of-range BESA channel label index")
+        labels[index] = value[2:].decode("utf-16le").rstrip("\x00")
+        if not labels[index]:
+            raise ValueError("Empty BESA channel label")
+    if any(label is None for label in labels):
+        raise ValueError("Missing BESA channel labels")
+    return labels
+
+
 def _decode_packed(payload: bytes, scheme: int, n: int, wide_first: bool) -> np.ndarray:
     out = np.empty(n, dtype=np.int32)
     native = _native_decoder()
