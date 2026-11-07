@@ -39,6 +39,11 @@ python -m realtimemi --input 'D:\data\recording.besa' --output-dir 'D:\results'
 
 ## EEG waveform viewer
 
+The viewer is also published as a separate installable app at
+[UDA-Neuro/ECOG-VIEWER](https://github.com/UDA-Neuro/ECOG-VIEWER). It shares the
+BESA reader and GPU MI method with this repository; see the viewer repository's
+provenance note for the source history.
+
 Click **Open EEG Viewer** in the main GUI, or run
 `python -m realtimemi --viewer` (on Windows,
 `Start-RealTimeMI.cmd --viewer`). Choose the BESA
@@ -261,3 +266,4 @@ ctest --test-dir build -C Release --output-on-failure
 The standalone check uses synthetic signals and needs no BCI2000 installation.
 BCI2000 integration and processing time still need to be verified on the target
 system.
+
