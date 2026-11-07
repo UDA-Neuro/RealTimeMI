@@ -31,8 +31,9 @@ window MI values are averaged first. The resulting channel means are
 standardized across electrodes using the population standard deviation
 (`ddof=0`); this is an across-electrode z-score, not a time-series z-score.
 The `mi-*-zscore.csv` file contains the per-channel mean, valid-window count,
-z-score, and inclusion flag; the JSON records the reference mean and standard
-deviation. The **Z-score map** button reopens the window. Blue is below the
+z-score, map inclusion flag, and actual reference usage; the JSON records the
+reference mean and standard deviation. The **Z-score map** button reopens the
+window. Blue is below the
 electrode mean, white is near it, and red is above it; gray means undefined.
 Map cells follow channel labels, not anatomical positions.
 

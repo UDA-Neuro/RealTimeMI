@@ -146,7 +146,7 @@ def analyze_besa(
     with summary_path.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.writer(stream)
         writer.writerow(["channel_number", "label", "mean_mi", "valid_windows",
-                         "z_score", "included_in_reference"])
+                         "z_score", "electrode_in_map", "used_in_reference"])
         for index, label in enumerate(labels):
             mean = summary["mean_mi"][index]
             z = summary["z_score"][index]
@@ -154,7 +154,8 @@ def analyze_besa(
                              f"{mean:.17g}" if np.isfinite(mean) else "nan",
                              int(summary["valid_windows"][index]),
                              f"{z:.17g}" if np.isfinite(z) else "nan",
-                             int(summary["included"][index])])
+                             int(summary["included"][index]),
+                             int(summary["included"][index] and np.isfinite(mean))])
     csv_saved = time.perf_counter()
     gpu_name = cp.cuda.runtime.getDeviceProperties(cp.cuda.Device().id)["name"]
     if isinstance(gpu_name, bytes):

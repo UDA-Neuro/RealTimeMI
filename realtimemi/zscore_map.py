@@ -23,8 +23,8 @@ def _color(z: float) -> str:
 def show_map(parent: tk.Misc, summary_path: str | Path) -> tk.Toplevel:
     with Path(summary_path).open(newline="", encoding="utf-8") as stream:
         rows = list(csv.DictReader(stream))
-    shown = [r for r in rows if r["included_in_reference"] == "1"]
-    excluded = [r["label"] for r in rows if r["included_in_reference"] != "1"]
+    shown = [r for r in rows if r["electrode_in_map"] == "1"]
+    excluded = [r["label"] for r in rows if r["electrode_in_map"] != "1"]
     window = tk.Toplevel(parent)
     window.title("RealTimeMI — Mean MI z-score map")
     window.geometry("1050x850")
