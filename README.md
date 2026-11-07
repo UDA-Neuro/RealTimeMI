@@ -73,6 +73,21 @@ JSON settings file. When opened from the main GUI, it uses the main GUI's
 results folder; standalone viewer mode uses `mi-output`. In the CSV, the
 later `final` row supersedes a `provisional` row for the same window/channel.
 
+To repeat a paced, synthetic end-to-end check of file following, continuous
+waveform display, automatic GPU MI, and CSV updates, run:
+
+```powershell
+python offline/verify_live_viewer.py --block-interval 5
+```
+
+The check creates a new synthetic BESA recording under `build/live-sim-test`,
+commits five seconds of signal every five wall-clock seconds, and completes
+after about 50 seconds. It verifies MI for the 0–30 and 15–45 second windows,
+including provisional and final updates. The folder contains `report.json`,
+the generated BESA file, and MI CSV/JSON. To manually watch a synthetic file
+grow, run `python demo/live_besa_simulator.py --output build/live-demo.besa`
+in one terminal and open that path in the viewer while the simulator runs.
+
 To try the public synthetic demo with no patient data, run:
 
 ```powershell
