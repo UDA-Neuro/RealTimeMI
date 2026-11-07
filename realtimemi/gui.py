@@ -75,7 +75,7 @@ class MIWindow:
 
     def open_viewer(self):
         from realtimemi.viewer_gui import launch
-        launch(self.root)
+        launch(self.root, self.output.get())
 
     def pick_output(self):
         path = filedialog.askdirectory()

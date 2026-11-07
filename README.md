@@ -60,6 +60,19 @@ research file only; it does not write to or control the clinical acquisition.
 The display follows committed blocks, so its delay depends on how often the
 recorder writes complete blocks and how long decoding takes.
 
+The viewer also calculates GPU MI automatically for its eight displayed
+channels. It uses 30-second windows stepping every 15 seconds, the default
+3–4 Hz phase and 80–250 Hz amplitude bands, and the same Tort estimator as
+the offline analysis. The table shows the latest MI for each channel; select
+a row to see its MI history. The first value appears when 30 seconds of
+recording are committed. A value is marked **provisional** until 1.6 seconds
+of later signal becomes available for filter context, then it is recalculated
+and marked **final**. The viewer remains responsive during GPU calculations.
+Each MI update is appended to a local `mi-live-*.csv` file with a companion
+JSON settings file. When opened from the main GUI, it uses the main GUI's
+results folder; standalone viewer mode uses `mi-output`. In the CSV, the
+later `final` row supersedes a `provisional` row for the same window/channel.
+
 To try the public synthetic demo with no patient data, run:
 
 ```powershell

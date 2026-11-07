@@ -225,15 +225,20 @@ def _decode_channel(prefix: int, payload: bytes, n: int) -> np.ndarray:
     return np.cumsum(np.cumsum(dd, dtype=np.int64), dtype=np.int64).astype(np.float32)
 
 
-def read_segment(path: str | Path, start_seconds: float = 0, duration_seconds: float = 300):
-    """Return samples x channels float32 counts and source sampling rate."""
+def read_segment(path: str | Path, start_seconds: float = 0, duration_seconds: float = 300,
+                 channel_indices: tuple[int, ...] | None = None):
+    """Return samples x selected channels float32 counts and source sampling rate."""
     with open(path, "rb") as file:
         rate, total, channels, blocks = metadata(file)
         start = round(start_seconds * rate)
         stop = start + round(duration_seconds * rate)
         if start < 0 or stop > total or stop <= start:
             raise ValueError("Requested segment is outside the recording")
-        result = np.empty((stop - start, channels), dtype=np.float32)
+        selected = tuple(range(channels)) if channel_indices is None else tuple(channel_indices)
+        if not selected or len(set(selected)) != len(selected) or any(i < 0 or i >= channels for i in selected):
+            raise ValueError("Invalid BESA channel selection")
+        output_index = {channel: column for column, channel in enumerate(selected)}
+        result = np.empty((stop - start, len(selected)), dtype=np.float32)
         first_sample = 0
         for offset, count in blocks:
             block_end = first_sample + count
@@ -273,7 +278,9 @@ def read_segment(path: str | Path, start_seconds: float = 0, duration_seconds: f
                     raise ValueError(f"Unsupported channel prefix {prefix} at channel {channel}, byte {pos}")
                 if len(encoded) != length:
                     raise ValueError("Truncated channel")
-                result[dest : dest + right - left, channel] = _decode_channel(prefix, encoded, count)[left:right]
+                if channel in output_index:
+                    result[dest : dest + right - left, output_index[channel]] = (
+                        _decode_channel(prefix, encoded, count)[left:right])
                 pos += advance
             if pos != len(payload):
                 raise ValueError("Data block has trailing bytes")

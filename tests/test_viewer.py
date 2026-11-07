@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
+from offline.besa_reader import read_segment
 from realtimemi.viewer import BesaBlockSource, WaveformChunk, WaveformPlayer, append_waveform
 
 
@@ -72,6 +73,9 @@ class GrowingBesaTest(unittest.TestCase):
             self.assertEqual((first.start_s, first.end_s), (0, 1))
             self.assertEqual(first.labels, ["A1", "A2"])
             self.assertEqual(first.data.shape, (1000, 2))
+            selected, _ = read_segment(path, 0, 1, (1, 0))
+            self.assertEqual(selected.shape, (10_000, 2))
+            self.assertEqual(selected[500, :].tolist(), [101, 100])
             self.assertIsNone(source.poll())
             with path.open("ab") as stream:
                 second_offset = stream.tell()

@@ -22,6 +22,7 @@ def modulation_index_gpu(
     overlap: float = 0.5,
     bins: int = 18,
     batch_size: int = 4,
+    window_start_samples: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Return MI[window, channel] and [start, end] seconds.
 
@@ -49,7 +50,13 @@ def modulation_index_gpu(
     if width < 2 or hop < 1 or data.shape[0] < width:
         raise ValueError("recording is shorter than one analysis window")
 
-    starts = np.arange(0, data.shape[0] - width + 1, hop, dtype=np.int64)
+    if window_start_samples is None:
+        starts = np.arange(0, data.shape[0] - width + 1, hop, dtype=np.int64)
+    else:
+        starts = np.asarray(window_start_samples, dtype=np.int64)
+        if (starts.ndim != 1 or not len(starts) or np.any(starts < 0) or
+                np.any(starts + width > data.shape[0])):
+            raise ValueError("window start is outside the recording")
     windows = np.column_stack((starts, starts + width)) / sample_rate
     result = np.full((len(starts), data.shape[1]), np.nan, dtype=np.float64)
     delay = round(1.5 * sample_rate)

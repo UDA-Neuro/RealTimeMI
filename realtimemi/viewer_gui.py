@@ -14,10 +14,12 @@ from tkinter import filedialog, messagebox, ttk
 import numpy as np
 
 from realtimemi.viewer import BesaBlockSource, WaveformChunk, WaveformPlayer
+from realtimemi.live_mi import LiveMIPlanner, LiveMIResult, compute_live_mi_window
+from realtimemi.live_mi_store import LiveMIResultStore
 
 
 class EEGViewer:
-    def __init__(self, root: tk.Tk | tk.Toplevel):
+    def __init__(self, root: tk.Tk | tk.Toplevel, output_dir: str | Path | None = None):
         self.root = root
         root.title("RealTimeMI — BESA EEG Viewer")
         root.geometry("1100x700")
@@ -36,6 +38,17 @@ class EEGViewer:
         self.source_finished = False
         self.last_frame = time.monotonic()
         self.last_received = 0.0
+        self.mi_status = tk.StringVar(value="MI: waiting for 30 seconds of signal.")
+        self.mi_planner = LiveMIPlanner()
+        self.mi_busy = False
+        self.mi_compute_lock = threading.Lock()
+        self.mi_epoch = 0
+        self.mi_results: dict[int, dict[int, tuple[float, bool]]] = {}
+        self.mi_channel_labels: list[str] = []
+        self.mi_selected_channel: int | None = None
+        self.mi_output_dir = Path(output_dir) if output_dir else Path.cwd() / "mi-output"
+        self.mi_store: LiveMIResultStore | None = None
+        self.mi_save_status = tk.StringVar(value=f"MI results: {self.mi_output_dir}")
 
         frame = ttk.Frame(root, padding=12)
         frame.pack(fill="both", expand=True)
@@ -63,10 +76,31 @@ class EEGViewer:
                                 highlightbackground="#c5cbd0")
         self.canvas.grid(row=4, column=0, columnspan=2, sticky="nsew")
         self.canvas.bind("<Configure>", lambda _: self.draw())
+        mi_panel = ttk.LabelFrame(frame, text="Modulation Index · 3–4 Hz phase × 80–250 Hz amplitude", padding=8)
+        mi_panel.grid(row=5, column=0, columnspan=2, sticky="nsew", pady=(8, 0))
+        self.mi_table = ttk.Treeview(mi_panel, columns=("channel", "mi", "window", "state"),
+                                     show="headings", height=7, selectmode="browse")
+        for key, title, width in (("channel", "Channel", 80), ("mi", "Latest MI", 90),
+                                  ("window", "Window (s)", 110), ("state", "Status", 90)):
+            self.mi_table.heading(key, text=title)
+            self.mi_table.column(key, width=width, anchor="center")
+        self.mi_table.grid(row=0, column=0, sticky="nsew")
+        self.mi_table.bind("<<TreeviewSelect>>", self.select_mi_channel)
+        self.mi_canvas = tk.Canvas(mi_panel, height=170, background="white", highlightthickness=1,
+                                   highlightbackground="#c5cbd0")
+        self.mi_canvas.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
+        self.mi_canvas.bind("<Configure>", lambda _: self.draw_mi())
+        ttk.Label(mi_panel, textvariable=self.mi_status).grid(row=1, column=0, columnspan=2,
+                                                                sticky="w", pady=(5, 0))
+        ttk.Label(mi_panel, textvariable=self.mi_save_status).grid(row=2, column=0, columnspan=2,
+                                                                    sticky="w")
+        mi_panel.columnconfigure(1, weight=1)
+        mi_panel.rowconfigure(0, weight=1)
         ttk.Label(frame, text="Waveform display: 1 kHz antialias resampling; each channel autoscaled in ADC counts.").grid(
-            row=5, column=0, columnspan=2, sticky="w", pady=(7, 0))
+            row=6, column=0, columnspan=2, sticky="w", pady=(7, 0))
         frame.columnconfigure(0, weight=1)
-        frame.rowconfigure(4, weight=1)
+        frame.rowconfigure(4, weight=3)
+        frame.rowconfigure(5, weight=2)
         root.after(100, self.poll_events)
         root.after(100, self.tick)
         root.protocol("WM_DELETE_WINDOW", self.close)
@@ -86,6 +120,7 @@ class EEGViewer:
         generation = self.generation
         self.running = True
         self.active_mode = self.mode.get()
+        self.reset_mi()
         self.source_finished = False
         self.player.clear()
         self.latest = None
@@ -145,6 +180,7 @@ class EEGViewer:
             return
         self.latest = None
         self.player.clear()
+        self.reset_mi()
         self.position.set("Display --")
         self.draw()
         if self.running:
@@ -157,10 +193,12 @@ class EEGViewer:
                 if generation != self.generation:
                     continue
                 if kind == "labels":
+                    self.mi_channel_labels = value
                     self.channel_box["values"] = [f"{i}: {label}" for i, label in enumerate(value, 1)]
                     if self.first_channel >= len(value):
                         self.first_channel = 0
                     self.channel.set(self.channel_box["values"][self.first_channel])
+                    self.refresh_mi_table()
                 elif kind == "chunk":
                     selected_channel, value = value
                     if selected_channel != self.first_channel:
@@ -180,6 +218,18 @@ class EEGViewer:
                     self.status.set(value)
                 elif kind == "finished":
                     self.source_finished = True
+                elif kind == "mi_done":
+                    epoch, result = value
+                    if epoch == self.mi_epoch:
+                        self.mi_busy = False
+                        self.mi_planner.complete(result)
+                        self.record_mi_result(result)
+                elif kind == "mi_error":
+                    epoch, start, error = value
+                    if epoch == self.mi_epoch:
+                        self.mi_busy = False
+                        self.mi_planner.failed(start)
+                        self.mi_status.set(f"MI {start}–{start + 30} s: {error}; retrying")
         except queue.Empty:
             pass
         if self.running and self.active_mode == "follow" and self.latest is not None:
@@ -200,10 +250,140 @@ class EEGViewer:
         if self.player.available is not None and self.player.cursor_s is not None:
             self.position.set(f"Display {self.player.cursor_s:.1f} s / committed "
                               f"{self.player.available.end_s:.1f} s")
-        if self.running and self.source_finished and (self.player.caught_up or self.player.available is None):
+            self.schedule_mi()
+        if (self.running and self.source_finished and not self.mi_busy and
+                not self.mi_planner.pending and
+                (self.player.caught_up or self.player.available is None)):
             self.stop()
             self.status.set("Replay finished.")
         self.root.after(100, self.tick)
+
+    def reset_mi(self):
+        self.mi_epoch += 1
+        self.mi_planner = LiveMIPlanner(replay=self.active_mode == "replay")
+        self.mi_busy = False
+        self.mi_results.clear()
+        self.mi_selected_channel = None
+        self.mi_store = None
+        self.mi_save_status.set(f"MI results: {self.mi_output_dir}")
+        self.mi_status.set("MI: waiting for 30 seconds of signal.")
+        self.refresh_mi_table()
+        self.draw_mi()
+
+    def schedule_mi(self):
+        if not self.running or not self.mi_channel_labels or self.mi_busy:
+            return
+        available = self.player.available
+        if available is None:
+            return
+        self.mi_planner.observe(self.player.cursor_s or available.start_s, available.end_s)
+        start = self.mi_planner.pop()
+        if start is None:
+            return
+        channels = tuple(range(self.first_channel,
+                               min(self.first_channel + 8, len(self.mi_channel_labels))))
+        generation, epoch = self.generation, self.mi_epoch
+        path = Path(self.path.get())
+        self.mi_busy = True
+        self.mi_status.set(f"MI: calculating {start}–{start + 30} s on GPU…")
+
+        def worker():
+            try:
+                with self.mi_compute_lock:
+                    if generation != self.generation or epoch != self.mi_epoch:
+                        return
+                    result = compute_live_mi_window(path, start, channels)
+                self.events.put((generation, "mi_done", (epoch, result)))
+            except Exception as exc:
+                self.events.put((generation, "mi_error",
+                                 (epoch, start, f"{type(exc).__name__}: {exc}")))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def record_mi_result(self, result: LiveMIResult):
+        for channel, value in zip(result.channels, result.values):
+            self.mi_results.setdefault(channel, {})[result.start_s] = (
+                float(value), result.final_context)
+        status = "final" if result.final_context else "provisional; awaiting filter context"
+        self.mi_status.set(f"MI: {result.start_s}–{result.end_s} s, {status}, "
+                           f"computed in {result.elapsed_s:.2f} s")
+        try:
+            if self.mi_store is None:
+                self.mi_store = LiveMIResultStore(self.mi_output_dir, self.mi_channel_labels)
+            self.mi_store.append(result)
+            self.mi_save_status.set(f"MI CSV: {self.mi_store.csv_path}")
+        except OSError as exc:
+            self.mi_save_status.set(f"MI could not be saved: {exc}")
+        self.refresh_mi_table()
+        self.draw_mi()
+
+    def refresh_mi_table(self):
+        if not hasattr(self, "mi_table"):
+            return
+        for item in self.mi_table.get_children():
+            self.mi_table.delete(item)
+        for channel in range(self.first_channel,
+                             min(self.first_channel + 8, len(self.mi_channel_labels))):
+            history = self.mi_results.get(channel, {})
+            label = self.mi_channel_labels[channel]
+            if history:
+                start = max(history)
+                value, final = history[start]
+                mi_text = "undefined" if not np.isfinite(value) else f"{value:.6g}"
+                values = (label, mi_text, f"{start}–{start + 30}",
+                          "final" if final else "provisional")
+            else:
+                values = (label, "—", "—", "waiting")
+            self.mi_table.insert("", "end", iid=str(channel), values=values)
+        if self.mi_selected_channel is None and self.mi_table.get_children():
+            self.mi_selected_channel = int(self.mi_table.get_children()[0])
+        if self.mi_selected_channel is not None and self.mi_table.exists(str(self.mi_selected_channel)):
+            self.mi_table.selection_set(str(self.mi_selected_channel))
+
+    def select_mi_channel(self, _event=None):
+        selection = self.mi_table.selection()
+        if selection:
+            self.mi_selected_channel = int(selection[0])
+            self.draw_mi()
+
+    def draw_mi(self):
+        if not hasattr(self, "mi_canvas"):
+            return
+        self.mi_canvas.delete("all")
+        channel = self.mi_selected_channel
+        if channel is None:
+            self.mi_canvas.create_text(15, 15, anchor="nw", text="MI trend appears after 30 s.",
+                                       fill="#59636e")
+            return
+        history = self.mi_results.get(channel, {})
+        points = [(start + 30, value) for start, (value, _) in sorted(history.items())
+                  if np.isfinite(value)]
+        if not points:
+            self.mi_canvas.create_text(15, 15, anchor="nw", text="MI trend appears after 30 s.",
+                                       fill="#59636e")
+            return
+        width = max(self.mi_canvas.winfo_width(), 300)
+        height = max(self.mi_canvas.winfo_height(), 150)
+        left, right, top, bottom = 48, width - 15, 18, height - 28
+        self.mi_canvas.create_line(left, top, left, bottom, right, bottom, fill="#7a858f")
+        label = self.mi_channel_labels[channel] if channel < len(self.mi_channel_labels) else str(channel + 1)
+        self.mi_canvas.create_text(right, top, anchor="ne", text=f"{label} MI", fill="#43505d")
+        x_first = max(0, points[0][0] - 15)
+        x_last = max(x_first + 30, points[-1][0])
+        y_max = max(0.001, max(value for _, value in points) * 1.1)
+        coords = []
+        for end, value in points:
+            x = left + (right - left) * (end - x_first) / (x_last - x_first)
+            y = bottom - (bottom - top) * value / y_max
+            coords.extend((x, y))
+        if len(coords) >= 4:
+            self.mi_canvas.create_line(*coords, fill="#b04a91", width=2)
+        for x, y in zip(coords[::2], coords[1::2]):
+            self.mi_canvas.create_oval(x - 3, y - 3, x + 3, y + 3,
+                                       fill="#b04a91", outline="")
+        self.mi_canvas.create_text(left, bottom + 5, anchor="nw", text=f"{x_first:g} s")
+        self.mi_canvas.create_text(right, bottom + 5, anchor="ne", text=f"{x_last:g} s")
+        self.mi_canvas.create_text(left - 5, top, anchor="e", text=f"{y_max:.3g}")
 
     def draw(self):
         self.canvas.delete("all")
@@ -253,10 +433,10 @@ class EEGViewer:
                 self.canvas.create_line(*coords, fill="#1769a4", width=1)
 
 
-def launch(parent: tk.Tk | None = None):
+def launch(parent: tk.Tk | None = None, output_dir: str | Path | None = None):
     if parent is None:
         root = tk.Tk()
-        EEGViewer(root)
+        EEGViewer(root, output_dir)
         root.mainloop()
     else:
-        EEGViewer(tk.Toplevel(parent))
+        EEGViewer(tk.Toplevel(parent), output_dir)

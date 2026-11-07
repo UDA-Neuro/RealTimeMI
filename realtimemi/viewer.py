@@ -143,9 +143,10 @@ class BesaBlockSource:
             return None
         # read_segment validates BDAT payload and the current tag table again;
         # an in-progress writer update therefore cannot produce a partial trace.
-        raw, _ = read_segment(self.path, start_sample / rate, block_samples / rate)
         right = min(first_channel + count, channels)
-        display = resample_poly(raw[:, first_channel:right], 1, 10, axis=0).astype(np.float32)
+        raw, _ = read_segment(self.path, start_sample / rate, block_samples / rate,
+                              tuple(range(first_channel, right)))
+        display = resample_poly(raw, 1, 10, axis=0).astype(np.float32)
         self.next_index = index + 1
         self.last_start = first_channel
         if self.replay:
