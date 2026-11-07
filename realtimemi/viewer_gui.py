@@ -13,7 +13,7 @@ from tkinter import filedialog, messagebox, ttk
 
 import numpy as np
 
-from realtimemi.viewer import BesaBlockSource, WaveformChunk, append_waveform
+from realtimemi.viewer import BesaBlockSource, WaveformChunk, WaveformPlayer
 
 
 class EEGViewer:
@@ -25,11 +25,16 @@ class EEGViewer:
         self.mode = tk.StringVar(value="follow")
         self.channel = tk.StringVar(value="1")
         self.status = tk.StringVar(value="Choose a BESA file, then start the viewer.")
+        self.position = tk.StringVar(value="Display --")
         self.events: queue.Queue = queue.Queue()
         self.running = False
+        self.active_mode = "follow"
         self.generation = 0
         self.first_channel = 0
         self.latest: WaveformChunk | None = None
+        self.player = WaveformPlayer(window_s=10)
+        self.source_finished = False
+        self.last_frame = time.monotonic()
         self.last_received = 0.0
 
         frame = ttk.Frame(root, padding=12)
@@ -51,6 +56,7 @@ class EEGViewer:
         self.channel_box = ttk.Combobox(controls, textvariable=self.channel, state="readonly", width=16)
         self.channel_box.pack(side="left")
         self.channel_box.bind("<<ComboboxSelected>>", self.change_channel)
+        ttk.Label(controls, textvariable=self.position).pack(side="left", padx=(24, 0))
         ttk.Label(frame, textvariable=self.status, wraplength=1000).grid(
             row=3, column=0, columnspan=2, sticky="w", pady=(0, 8))
         self.canvas = tk.Canvas(frame, background="white", highlightthickness=1,
@@ -62,6 +68,7 @@ class EEGViewer:
         frame.columnconfigure(0, weight=1)
         frame.rowconfigure(4, weight=1)
         root.after(100, self.poll_events)
+        root.after(100, self.tick)
         root.protocol("WM_DELETE_WINDOW", self.close)
 
     def pick_file(self):
@@ -78,11 +85,15 @@ class EEGViewer:
         self.generation += 1
         generation = self.generation
         self.running = True
+        self.active_mode = self.mode.get()
+        self.source_finished = False
+        self.player.clear()
         self.latest = None
+        self.position.set("Display --")
         self.draw()
         self.start_button.configure(state="disabled")
         self.stop_button.configure(state="normal")
-        mode = self.mode.get()
+        mode = self.active_mode
         self.status.set("Waiting for a complete BESA data block…")
 
         def worker():
@@ -91,12 +102,13 @@ class EEGViewer:
             last_error = None
             while self.running and generation == self.generation:
                 try:
-                    chunk = source.poll(self.first_channel)
+                    selected_channel = self.first_channel
+                    chunk = source.poll(selected_channel)
                     if source.labels and not announced:
                         self.events.put((generation, "labels", source.labels))
                         announced = True
                     if chunk is not None:
-                        self.events.put((generation, "chunk", chunk))
+                        self.events.put((generation, "chunk", (selected_channel, chunk)))
                     elif mode == "replay" and source.next_index is not None and source.next_index >= 0:
                         # A replay reaches its end when no next block exists.
                         with path.open("rb") as stream:
@@ -132,6 +144,8 @@ class EEGViewer:
         except ValueError:
             return
         self.latest = None
+        self.player.clear()
+        self.position.set("Display --")
         self.draw()
         if self.running:
             self.status.set("Loading selected channels from the latest BESA block…")
@@ -148,27 +162,48 @@ class EEGViewer:
                         self.first_channel = 0
                     self.channel.set(self.channel_box["values"][self.first_channel])
                 elif kind == "chunk":
-                    self.latest = append_waveform(self.latest, value)
+                    selected_channel, value = value
+                    if selected_channel != self.first_channel:
+                        continue
+                    first_chunk = self.player.available is None
+                    self.player.push(value)
+                    if first_chunk:
+                        self.last_frame = time.monotonic()
+                    self.latest = self.player.visible()
                     self.last_received = time.time()
                     self.draw()
-                    prefix = "Replay" if self.mode.get() == "replay" else "File follow"
+                    prefix = "Replay" if self.active_mode == "replay" else "File follow"
                     skipped = f"; skipped {value.skipped_blocks} older blocks" if value.skipped_blocks else ""
                     self.status.set(f"{prefix}: {value.start_s:g}–{value.end_s:g} s; "
                                     f"{len(value.labels)} channels{skipped}")
                 elif kind == "status":
                     self.status.set(value)
                 elif kind == "finished":
-                    self.stop()
-                    self.status.set("Replay finished.")
+                    self.source_finished = True
         except queue.Empty:
             pass
-        if self.running and self.mode.get() == "follow" and self.latest is not None:
+        if self.running and self.active_mode == "follow" and self.latest is not None:
             age = time.time() - self.last_received
             if age > 10:
                 self.status.set(f"No new complete BESA block for {age:.0f} s; "
                                 f"last displayed {self.latest.start_s:g}–{self.latest.end_s:g} s. "
                                 "Check whether the recorder updates this file during acquisition.")
         self.root.after(100, self.poll_events)
+
+    def tick(self):
+        now = time.monotonic()
+        elapsed = now - self.last_frame
+        self.last_frame = now
+        if self.running and self.player.advance(elapsed):
+            self.latest = self.player.visible()
+            self.draw()
+        if self.player.available is not None and self.player.cursor_s is not None:
+            self.position.set(f"Display {self.player.cursor_s:.1f} s / committed "
+                              f"{self.player.available.end_s:.1f} s")
+        if self.running and self.source_finished and (self.player.caught_up or self.player.available is None):
+            self.stop()
+            self.status.set("Replay finished.")
+        self.root.after(100, self.tick)
 
     def draw(self):
         self.canvas.delete("all")
@@ -182,11 +217,20 @@ class EEGViewer:
         left, right, top, bottom = 105, width - 20, 25, height - 35
         channels = chunk.data.shape[1]
         lane = (bottom - top) / channels
+        origin = self.player.origin_s if self.player.origin_s is not None else chunk.start_s
+        window_start = max(origin, chunk.end_s - self.player.window_s)
+        window_end = window_start + self.player.window_s
         self.canvas.create_line(left, top, left, bottom, right, bottom, fill="#7a858f")
-        self.canvas.create_text(left, bottom + 8, anchor="nw", text=f"{chunk.start_s:g} s")
-        self.canvas.create_text(right, bottom + 8, anchor="ne", text=f"{chunk.end_s:g} s")
+        self.canvas.create_text(left, bottom + 8, anchor="nw", text=f"{window_start:.1f} s")
+        self.canvas.create_text(right, bottom + 8, anchor="ne", text=f"{window_end:.1f} s")
+        cursor_x = left + (right - left) * (chunk.end_s - window_start) / self.player.window_s
+        self.canvas.create_line(cursor_x, top, cursor_x, bottom, fill="#b7c3ce", dash=(3, 3))
         bins = min(max(right - left, 1), 900, len(chunk.data))
-        edges = np.linspace(0, len(chunk.data), bins + 1, dtype=int)
+        step = max(1, (len(chunk.data) + bins - 1) // bins)
+        starts = np.arange(0, len(chunk.data), step)
+        sample_centers = np.minimum(starts + step / 2, len(chunk.data) - 1)
+        x = left + (right - left) * (
+            chunk.start_s + sample_centers / 1000 - window_start) / self.player.window_s
         for index, label in enumerate(chunk.labels):
             baseline = top + (index + 0.5) * lane
             self.canvas.create_line(left, baseline, right, baseline, fill="#e3e7eb")
@@ -197,16 +241,14 @@ class EEGViewer:
                 continue
             center = float(np.median(finite))
             scale = float(np.percentile(np.abs(finite - center), 99)) or 1.0
-            coords = []
-            for j in range(bins):
-                part = values[edges[j]:edges[j + 1]]
-                part = part[np.isfinite(part)]
-                if not len(part):
-                    continue
-                x = left + (right - left) * (j + 0.5) / bins
-                for y_value in (float(part.min()), float(part.max())):
-                    y = baseline - (y_value - center) / scale * lane * 0.36
-                    coords.extend((x, max(baseline - lane * 0.45, min(baseline + lane * 0.45, y))))
+            clean = np.where(np.isfinite(values), values, center)
+            low = np.minimum.reduceat(clean, starts)
+            high = np.maximum.reduceat(clean, starts)
+            y_low = baseline - (low - center) / scale * lane * 0.36
+            y_high = baseline - (high - center) / scale * lane * 0.36
+            y_low = np.clip(y_low, baseline - lane * 0.45, baseline + lane * 0.45)
+            y_high = np.clip(y_high, baseline - lane * 0.45, baseline + lane * 0.45)
+            coords = np.column_stack((x, y_low, x, y_high)).ravel().tolist()
             if len(coords) >= 4:
                 self.canvas.create_line(*coords, fill="#1769a4", width=1)
 

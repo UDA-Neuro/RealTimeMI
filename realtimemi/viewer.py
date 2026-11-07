@@ -23,14 +23,66 @@ class WaveformChunk:
 
 
 def append_waveform(previous: WaveformChunk | None, current: WaveformChunk,
-                    seconds: int = 10) -> WaveformChunk:
-    """Keep a bounded continuous trace for the rolling display."""
+                    seconds: int = 30) -> WaveformChunk:
+    """Keep a bounded continuous buffer for smooth playback."""
     if (previous is None or previous.labels != current.labels or current.skipped_blocks or
             not np.isclose(previous.end_s, current.start_s, atol=1e-6)):
         return current
     values = np.concatenate((previous.data, current.data), axis=0)[-seconds * 1000:]
     return WaveformChunk(values, current.labels, current.end_s - len(values) / 1000,
                          current.end_s, current.source_mtime)
+
+
+class WaveformPlayer:
+    """Advance through committed samples at recording speed on the GUI clock."""
+
+    def __init__(self, window_s: int = 10):
+        self.window_s = window_s
+        self.available: WaveformChunk | None = None
+        self.cursor_s: float | None = None
+        self.origin_s: float | None = None
+
+    def clear(self):
+        self.available = None
+        self.cursor_s = None
+        self.origin_s = None
+
+    def push(self, chunk: WaveformChunk):
+        previous = self.available
+        continuous = (previous is not None and previous.labels == chunk.labels and
+                      not chunk.skipped_blocks and
+                      np.isclose(previous.end_s, chunk.start_s, atol=1e-6))
+        self.available = append_waveform(previous, chunk, max(30, self.window_s + 10))
+        if not continuous or self.cursor_s is None:
+            self.cursor_s = chunk.start_s
+            self.origin_s = chunk.start_s
+        elif self.cursor_s < self.available.start_s:
+            self.cursor_s = self.available.start_s
+
+    def advance(self, elapsed_s: float) -> bool:
+        if self.available is None or self.cursor_s is None or elapsed_s <= 0:
+            return False
+        next_cursor = min(self.available.end_s, self.cursor_s + elapsed_s)
+        changed = next_cursor > self.cursor_s
+        self.cursor_s = next_cursor
+        return changed
+
+    def visible(self) -> WaveformChunk | None:
+        if self.available is None or self.cursor_s is None:
+            return None
+        stop = min(len(self.available.data),
+                   max(1, round((self.cursor_s - self.available.start_s) * 1000)))
+        start = max(0, stop - self.window_s * 1000)
+        data = self.available.data[start:stop]
+        first = self.available.start_s + start / 1000
+        return WaveformChunk(data, self.available.labels, first,
+                             self.available.start_s + stop / 1000,
+                             self.available.source_mtime)
+
+    @property
+    def caught_up(self) -> bool:
+        return (self.available is not None and self.cursor_s is not None and
+                self.cursor_s >= self.available.end_s - 1e-6)
 
 
 class BesaBlockSource:
@@ -66,6 +118,9 @@ class BesaBlockSource:
 
         now = time.monotonic()
         if self.replay:
+            if self.last_start is not None and self.last_start != first_channel:
+                self.next_index = max(0, (self.next_index or 1) - 1)
+                self.next_due = 0.0
             if now < self.next_due or self.next_index is None or self.next_index >= len(blocks):
                 return None
             index = self.next_index
@@ -94,7 +149,8 @@ class BesaBlockSource:
         self.next_index = index + 1
         self.last_start = first_channel
         if self.replay:
-            self.next_due = now + block_samples / rate
+            # Prefetch the next block before the display reaches this boundary.
+            self.next_due = now + max(0.25, block_samples / rate - 2.0)
         return WaveformChunk(display, labels[first_channel:right], start_sample / rate,
                              (start_sample + block_samples) / rate,
                              self.path.stat().st_mtime, skipped)

@@ -44,7 +44,9 @@ Click **Open EEG Viewer** in the main GUI, or run
 `Start-RealTimeMI.cmd --viewer`). Choose the BESA
 recording on PC#2 and select **Follow growing file**. The viewer opens the
 latest complete BESA data block, then checks for newly committed blocks every
-0.5 seconds. It shows eight channels at a time with recorded channel labels;
+0.5 seconds. The display advances through available samples every 0.1 seconds
+in a rolling ten-second window, so the waveform moves continuously across
+BESA block boundaries. It shows eight channels at a time with recorded channel labels;
 the **First channel** menu selects another group. The waveform display is
 antialias resampled to 1 kHz and autoscaled per channel in ADC counts.
 
@@ -55,6 +57,8 @@ tables while acquisition is running. If the file is only finalized after
 recording, the viewer cannot show new data until then. The status line reports
 when no new complete block has appeared for 10 seconds. The viewer reads the
 research file only; it does not write to or control the clinical acquisition.
+The display follows committed blocks, so its delay depends on how often the
+recorder writes complete blocks and how long decoding takes.
 
 To try the public synthetic demo with no patient data, run:
 

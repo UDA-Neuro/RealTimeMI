@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from realtimemi.viewer import BesaBlockSource, append_waveform
+from realtimemi.viewer import BesaBlockSource, WaveformChunk, WaveformPlayer, append_waveform
 
 
 def tag(name: bytes, payload: bytes) -> bytes:
@@ -40,6 +40,19 @@ def commit_snapshot(path: Path, block_offsets: list[int], samples: int):
 
 
 class GrowingBesaTest(unittest.TestCase):
+    def test_player_scrolls_across_block_boundaries(self):
+        player = WaveformPlayer(window_s=10)
+        for index in range(3):
+            block = WaveformChunk(np.full((5000, 1), index, dtype=np.float32),
+                                  ["A1"], index * 5, (index + 1) * 5, 0)
+            player.push(block)
+            self.assertTrue(player.advance(5))
+        visible = player.visible()
+        self.assertEqual((visible.start_s, visible.end_s, visible.data.shape),
+                         (5, 15, (10_000, 1)))
+        self.assertEqual(float(visible.data[0, 0]), 1)
+        self.assertEqual(float(visible.data[-1, 0]), 2)
+
     def test_follow_replays_latest_then_reads_new_commit(self):
         scratch = Path(__file__).resolve().parents[1] / "build" / "test-temp"
         scratch.mkdir(parents=True, exist_ok=True)
@@ -70,6 +83,18 @@ class GrowingBesaTest(unittest.TestCase):
             rolling = append_waveform(first, second)
             self.assertEqual((rolling.start_s, rolling.end_s, rolling.data.shape),
                              (0, 2, (2000, 2)))
+            player = WaveformPlayer()
+            player.push(first)
+            self.assertTrue(player.advance(0.25))
+            self.assertAlmostEqual(player.cursor_s, 0.25)
+            player.push(second)
+            self.assertAlmostEqual(player.cursor_s, 0.25)
+            self.assertTrue(player.advance(0.9))
+            self.assertAlmostEqual(player.cursor_s, 1.15)
+            self.assertEqual(player.visible().data.shape, (1150, 2))
+            self.assertTrue(player.advance(2.0))
+            self.assertTrue(player.caught_up)
+            self.assertFalse(player.advance(0.1))
             self.assertIsNone(source.poll())
 
 
