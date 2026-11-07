@@ -13,7 +13,12 @@ def main():
     parser.add_argument("--duration", type=float, default=300)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--hash-input", action="store_true", help="Record source SHA-256 after result")
+    parser.add_argument("--viewer", action="store_true", help="Open the BESA waveform viewer")
     args = parser.parse_args()
+    if args.viewer:
+        from realtimemi.viewer_gui import launch
+        launch()
+        return
     if not args.input:
         from realtimemi.gui import launch
         launch()

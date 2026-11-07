@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 from scipy.signal import fftconvolve
 
-from offline.besa_reader import _decode_packed, channel_labels
+from offline.besa_reader import _decode_packed, _packed_length, channel_labels
 from realtimemi.mi import modulation_index_gpu
 
 
@@ -18,6 +18,12 @@ class PackedDecoderTest(unittest.TestCase):
         payload = b"\x0a\x00\x02\x00" + bytes([7 * 15 + 7, 8 * 15 + 6, 254, 0xFD])
         np.testing.assert_array_equal(_decode_packed(payload, 1, 7, False),
                                       [10, 2, 0, 0, 1, -1, -3])
+
+    def test_uncompressed_packed_channel_boundary(self):
+        first = struct.pack("<ii", 10, 2) + bytes([7 * 15 + 7])
+        payload = first + b"\x00\x01"
+        self.assertEqual(_packed_length(payload, 1, 4, True), len(first))
+        np.testing.assert_array_equal(_decode_packed(first, 1, 4, True), [10, 2, 0, 0])
 
 
 class ChannelLabelTest(unittest.TestCase):

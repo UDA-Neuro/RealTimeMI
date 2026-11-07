@@ -154,6 +154,50 @@ def _decode_packed(payload: bytes, scheme: int, n: int, wide_first: bool) -> np.
     return out
 
 
+def _packed_length(payload: bytes, scheme: int, n: int, wide_first: bool) -> int:
+    """Find the next channel boundary in an uncompressed packed BDAT payload."""
+    pos = 8 if wide_first else 4
+    if n < 2 or len(payload) < pos:
+        raise ValueError("Truncated packed BESA channel")
+    decoded = 2
+    while decoded < n:
+        if pos >= len(payload):
+            raise ValueError("Truncated packed BESA channel")
+        code = payload[pos]
+        pos += 1
+        if scheme == 1 and code <= 224:
+            count, width = 2, 0
+        elif scheme == 2 and code <= 124:
+            count, width = 3, 0
+        elif scheme == 2 and code <= 245:
+            count, width = 2, 0
+        elif scheme == 3 and code <= 80:
+            count, width = 4, 0
+        elif scheme == 3 and code <= 249:
+            count, width = 2, 0
+        elif scheme == 1 and 248 <= code <= 254:
+            count, width = 255 - code, 1
+        elif scheme == 1 and 242 <= code <= 247:
+            count, width = 248 - code, 2
+        elif scheme == 1 and 236 <= code <= 241:
+            count, width = 242 - code, 4
+        elif scheme == 2 and 250 <= code <= 254:
+            count, width = 255 - code, 1
+        elif scheme == 2 and 246 <= code <= 249:
+            count, width = 250 - code, 2
+        elif scheme == 3 and 252 <= code <= 254:
+            count, width = 255 - code, 1
+        elif scheme == 3 and 250 <= code <= 251:
+            count, width = 252 - code, 2
+        else:
+            raise ValueError(f"Unknown BESA packed code {code} in scheme {scheme}")
+        if decoded + count > n or pos + count * width > len(payload):
+            raise ValueError("Malformed packed BESA channel length")
+        decoded += count
+        pos += count * width
+    return pos
+
+
 def _decode_channel(prefix: int, payload: bytes, n: int) -> np.ndarray:
     mode = prefix
     if prefix in (9, 13, 14, 15, 17, 18, 19, 29):
@@ -217,6 +261,12 @@ def read_segment(path: str | Path, start_seconds: float = 0, duration_seconds: f
                     advance = 5 + length
                 elif prefix in (0, 6, 8):
                     length = {0: 2 * count, 6: 8 + 2 * (count - 2), 8: 4 * count}[prefix]
+                    encoded = payload[pos + 1 : pos + 1 + length]
+                    advance = 1 + length
+                elif prefix in (3, 4, 5, 7, 10, 11):
+                    length = _packed_length(payload[pos + 1 :],
+                                            {3: 1, 4: 2, 5: 3, 7: 1, 10: 2, 11: 3}[prefix],
+                                            count, prefix in (7, 10, 11))
                     encoded = payload[pos + 1 : pos + 1 + length]
                     advance = 1 + length
                 else:

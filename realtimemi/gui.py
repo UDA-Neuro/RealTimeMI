@@ -40,6 +40,7 @@ class MIWindow:
         ttk.Entry(options, textvariable=self.duration, width=8).pack(side="left", padx=6)
         self.run_button = ttk.Button(frame, text="Calculate MI", command=self.run)
         self.run_button.grid(row=4, column=1, sticky="e")
+        ttk.Button(options, text="Open EEG Viewer", command=self.open_viewer).pack(side="left", padx=(18, 0))
         ttk.Label(frame, textvariable=self.status, wraplength=820,
                   justify="left").grid(row=5, column=0, columnspan=2, sticky="w", pady=(0, 8))
 
@@ -71,6 +72,10 @@ class MIWindow:
                                                  ("All files", "*")])
         if path:
             self.source.set(path)
+
+    def open_viewer(self):
+        from realtimemi.viewer_gui import launch
+        launch(self.root)
 
     def pick_output(self):
         path = filedialog.askdirectory()

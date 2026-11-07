@@ -37,6 +37,25 @@ For command-line use:
 python -m realtimemi --input 'D:\data\recording.besa' --output-dir 'D:\results'
 ```
 
+## EEG waveform viewer
+
+Click **Open EEG Viewer** in the main GUI, or run
+`python -m realtimemi --viewer` (on Windows,
+`Start-RealTimeMI.cmd --viewer`). Choose the BESA
+recording on PC#2 and select **Follow growing file**. The viewer opens the
+latest complete BESA data block, then checks for newly committed blocks every
+0.5 seconds. It shows eight channels at a time with recorded channel labels;
+the **First channel** menu selects another group. The waveform display is
+antialias resampled to 1 kHz and autoscaled per channel in ADC counts.
+
+**Replay saved file (1×)** displays a finished BESA recording at its recorded
+speed for setup and testing. This is playback, not acquisition. File-follow
+requires the recording program to publish updated BESA sample counts and block
+tables while acquisition is running. If the file is only finalized after
+recording, the viewer cannot show new data until then. The status line reports
+when no new complete block has appeared for 10 seconds. The viewer reads the
+research file only; it does not write to or control the clinical acquisition.
+
 To try the public synthetic demo with no patient data, run:
 
 ```powershell
