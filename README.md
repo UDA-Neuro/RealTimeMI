@@ -25,6 +25,23 @@ and an output folder, runs
 the default first five-minute segment, plots MI for a selected channel, and
 writes timestamped `mi-*.csv` and `mi-*.json` files.
 
+After each analysis, a second window opens with a color map of the whole
+recording's mean MI z-score for every electrode. Each channel's finite 30 s
+window MI values are averaged first. The resulting channel means are
+standardized across electrodes using the population standard deviation
+(`ddof=0`); this is an across-electrode z-score, not a time-series z-score.
+The `mi-*-zscore.csv` file contains the per-channel mean, valid-window count,
+z-score, and inclusion flag; the JSON records the reference mean and standard
+deviation. The **Z-score map** button reopens the window. Blue is below the
+electrode mean, white is near it, and red is above it; gray means undefined.
+Map cells follow channel labels, not anatomical positions.
+
+For BESA recordings, `DC01`-style auxiliary channels are excluded from the
+z-score reference and map by default, leaving the A/B electrodes. Check
+**Include DC in z-score** or pass `--include-dc` to include them. If the
+reference has fewer than two finite channel means or zero variance, z-scores
+are undefined and shown in gray.
+
 For BESA input, the channel menu shows the labels stored in the recording,
 such as `5: A1`. The JSON includes `channel_labels` in the same order as the
 numbered `channel_001`, `channel_002`, ... columns in the CSV. The labels do

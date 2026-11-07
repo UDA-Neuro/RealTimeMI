@@ -20,6 +20,7 @@ from scipy.signal import firwin, freqz
 from offline.besa_reader import channel_labels, metadata, read_resampled_parallel
 from realtimemi import __version__
 from realtimemi.mi import modulation_index_gpu
+from realtimemi.summary import summarize_mi
 
 Progress = Callable[[str], None]
 
@@ -52,6 +53,7 @@ def analyze_besa(
     duration_seconds: float = 300,
     workers: int = 8,
     hash_input: bool = False,
+    include_dc: bool = False,
     progress: Progress | None = None,
 ) -> dict:
     """Analyze a complete BESA recording or a 1 kHz NPZ demo segment."""
@@ -131,6 +133,7 @@ def analyze_besa(
     notify("Saving results…")
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid4().hex[:8]
     csv_path = output_dir / f"mi-{run_id}.csv"
+    summary_path = output_dir / f"mi-{run_id}-zscore.csv"
     json_path = output_dir / f"mi-{run_id}.json"
     with csv_path.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.writer(stream)
@@ -139,6 +142,19 @@ def analyze_besa(
         for window, row in zip(windows, mi):
             writer.writerow([f"{window[0]:g}", f"{window[1]:g}"] +
                             ["nan" if not np.isfinite(x) else f"{x:.17g}" for x in row])
+    summary = summarize_mi(mi, labels, include_dc=include_dc)
+    with summary_path.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(["channel_number", "label", "mean_mi", "valid_windows",
+                         "z_score", "included_in_reference"])
+        for index, label in enumerate(labels):
+            mean = summary["mean_mi"][index]
+            z = summary["z_score"][index]
+            writer.writerow([index + 1, label,
+                             f"{mean:.17g}" if np.isfinite(mean) else "nan",
+                             int(summary["valid_windows"][index]),
+                             f"{z:.17g}" if np.isfinite(z) else "nan",
+                             int(summary["included"][index])])
     csv_saved = time.perf_counter()
     gpu_name = cp.cuda.runtime.getDeviceProperties(cp.cuda.Device().id)["name"]
     if isinstance(gpu_name, bytes):
@@ -159,6 +175,15 @@ def analyze_besa(
                "recording_edge": "reflect"},
         "windows": len(windows), "valid_values": int(np.isfinite(mi).sum()),
         "invalid_values": int(np.isnan(mi).sum()),
+        "zscore_summary": {
+            "method": "mean of valid window MI per channel, then across-channel z-score",
+            "reference": "electrodes excluding DC-labelled channels" if not include_dc else "all channels",
+            "reference_mean": summary["reference_mean"],
+            "reference_sd": summary["reference_sd"],
+            "reference_channels": summary["reference_channels"],
+            "ddof": summary["ddof"],
+            "summary_csv": str(summary_path),
+        },
         "python": sys.version.split()[0], "numpy": np.__version__,
         "scipy": scipy.__version__, "cupy": cp.__version__,
         "gpu": str(gpu_name),
@@ -172,6 +197,7 @@ def analyze_besa(
     info["elapsed_s"]["result_ready"] = round(time.perf_counter() - started, 3)
     json_path.write_text(json.dumps(info, indent=2), encoding="utf-8")
     info["csv_path"] = str(csv_path)
+    info["summary_path"] = str(summary_path)
     info["metadata_path"] = str(json_path)
     notify(f"Complete: {len(windows)} windows, {channels} channels")
     return info

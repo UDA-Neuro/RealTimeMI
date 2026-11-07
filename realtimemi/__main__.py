@@ -13,6 +13,7 @@ def main():
     parser.add_argument("--duration", type=float, default=300)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--hash-input", action="store_true", help="Record source SHA-256 after result")
+    parser.add_argument("--include-dc", action="store_true", help="Include DC-labelled channels in the z-score reference")
     parser.add_argument("--viewer", action="store_true", help="Open the BESA waveform viewer")
     args = parser.parse_args()
     if args.viewer:
@@ -26,9 +27,10 @@ def main():
     from realtimemi.pipeline import analyze_besa
     info = analyze_besa(args.input, args.output_dir, start_seconds=args.start,
                         duration_seconds=args.duration, workers=args.workers,
-                        hash_input=args.hash_input, progress=print)
+                        hash_input=args.hash_input, include_dc=args.include_dc, progress=print)
     print(json.dumps({"result_ready_s": info["elapsed_s"]["result_ready"],
-                      "csv": info["csv_path"], "metadata": info["metadata_path"]}))
+                      "csv": info["csv_path"], "zscore_csv": info["summary_path"],
+                      "metadata": info["metadata_path"]}))
 
 
 if __name__ == "__main__":

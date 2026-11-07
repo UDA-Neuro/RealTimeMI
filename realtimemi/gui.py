@@ -22,6 +22,9 @@ class MIWindow:
         self.duration = tk.StringVar(value="300")
         self.status = tk.StringVar(value="Select a BESA recording or NPZ demo.")
         self.channel = tk.StringVar(value="1")
+        self.include_dc = tk.BooleanVar(value=False)
+        self.summary_path: str | None = None
+        self.map_window: tk.Toplevel | None = None
         self.rows: list[list[str]] = []
 
         frame = ttk.Frame(root, padding=16)
@@ -41,6 +44,9 @@ class MIWindow:
         self.run_button = ttk.Button(frame, text="Calculate MI", command=self.run)
         self.run_button.grid(row=4, column=1, sticky="e")
         ttk.Button(options, text="Open EEG Viewer", command=self.open_viewer).pack(side="left", padx=(18, 0))
+        ttk.Checkbutton(options, text="Include DC in z-score", variable=self.include_dc).pack(side="left", padx=(12, 0))
+        self.map_button = ttk.Button(options, text="Z-score map", command=self.open_map, state="disabled")
+        self.map_button.pack(side="left", padx=(12, 0))
         ttk.Label(frame, textvariable=self.status, wraplength=820,
                   justify="left").grid(row=5, column=0, columnspan=2, sticky="w", pady=(0, 8))
 
@@ -82,6 +88,13 @@ class MIWindow:
         if path:
             self.output.set(path)
 
+    def open_map(self):
+        if self.summary_path:
+            from realtimemi.zscore_map import show_map
+            if self.map_window is not None and self.map_window.winfo_exists():
+                self.map_window.destroy()
+            self.map_window = show_map(self.root, self.summary_path)
+
     def run(self):
         try:
             start = float(self.start.get())
@@ -99,12 +112,14 @@ class MIWindow:
         self.channel_box["values"] = []
         self.draw()
         self.status.set("Starting analysis…")
+        include_dc = self.include_dc.get()
 
         def worker():
             try:
                 from realtimemi.pipeline import analyze_besa
                 info = analyze_besa(source, output, start_seconds=start,
                                     duration_seconds=duration,
+                                    include_dc=include_dc,
                                     progress=lambda message: self.events.put(("status", message)))
                 self.events.put(("done", info))
             except Exception as exc:
@@ -131,6 +146,9 @@ class MIWindow:
                     self.channel_box["values"] = [f"{i}: {label}" for i, label in enumerate(labels, 1)]
                     self.channel.set(self.channel_box["values"][0])
                     self.draw()
+                    self.summary_path = value["summary_path"]
+                    self.map_button.configure(state="normal")
+                    self.open_map()
         except queue.Empty:
             pass
         self.root.after(100, self.poll)
