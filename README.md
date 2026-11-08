@@ -1,5 +1,9 @@
 # Real-Time Modulation Index Toolbox
 
+The exploratory public-data checks for MI, spike, and ripple detectors are in
+[validation/README.md](validation/README.md). They are research benchmarks,
+not clinical performance claims.
+
 RealTimeMI is a local, Python-led modulation index toolbox for completed BESA
 ECoG recordings. It uses a bundled native BESA decoder, SciPy anti-alias
 resampling, and a local NVIDIA GPU via CuPy. MATLAB and BCI2000 are not needed

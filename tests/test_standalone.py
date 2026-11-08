@@ -68,6 +68,8 @@ class GPUAlgorithmTest(unittest.TestCase):
         control = np.sin(2 * np.pi * 3.5 * t) + np.sin(2 * np.pi * 130 * t)
         data = np.column_stack((coupled, control)).astype(np.float32)
         actual, windows = modulation_index_gpu(data, rate)
+        strided, _ = modulation_index_gpu(np.asfortranarray(data), rate)
+        np.testing.assert_allclose(strided, actual, rtol=0, atol=1e-12)
         targeted, targeted_windows = modulation_index_gpu(data, rate,
                                                           window_start_samples=np.array([0]))
         np.testing.assert_allclose(targeted, actual)

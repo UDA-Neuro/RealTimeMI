@@ -39,6 +39,9 @@ def modulation_index_gpu(
         raise ValueError("data must be a nonempty samples-by-channels numeric array")
     if not np.isfinite(data).all():
         raise ValueError("data contains non-finite samples")
+    # Fancy channel selection can produce Fortran-strided input. Keep the FFT
+    # batch layout predictable on CUDA for the samples-by-channels contract.
+    data = np.ascontiguousarray(data)
     if sample_rate <= 2 * amplitude_band[1]:
         raise ValueError("sampling rate must exceed twice the amplitude upper frequency")
     if not (0 < phase_band[0] < phase_band[1] < amplitude_band[0] < amplitude_band[1]):
