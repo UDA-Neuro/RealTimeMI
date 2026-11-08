@@ -1,0 +1,251 @@
+[
+  {
+    "dataset": "OpenNeuro ds006107",
+    "version": "1.0.0",
+    "subject": "01",
+    "source_sha256": "7ab636cf060564ee81234d7d6f6d5510264fb9261bb261dce010e179227282a2",
+    "sampling_hz": 1000,
+    "duration_s": 300,
+    "channels": [
+      "A1-AV",
+      "A17-AV",
+      "A33-AV",
+      "A50-AV",
+      "B14-AV",
+      "B31-AV",
+      "B47-AV",
+      "B64-AV"
+    ],
+    "annotation_files_used": false,
+    "implementations": {
+      "RealTimeHFO": "2a97d4d2b15b676a6ec9ee9ede9657f9e79eea46",
+      "RealTimeSpike": "b58f3d335926187525204409247b102dc3f0442e",
+      "epycom": "0.3",
+      "numpy": "2.3.5",
+      "scipy": "1.18.1"
+    },
+    "common_settings": {
+      "montage": "original EDF channels, no rereference",
+      "hfo_band_hz": [
+        80,
+        250
+      ],
+      "hfo_rms_window_ms": 5,
+      "hfo_threshold_sd": 5,
+      "hfo_merge_gap_ms": 10,
+      "hfo_duration_ms": [
+        6,
+        200
+      ],
+      "hfo_min_positive_peaks": 4,
+      "spike_band_hz": [
+        10,
+        60
+      ],
+      "spike_notch": "none",
+      "hfo_match_margin_ms": 10,
+      "spike_match_margin_ms": 100
+    },
+    "nonidentical_settings": {
+      "spike_current_threshold": "median envelope + 6 * 1.4826 * MAD",
+      "spike_janca_threshold": "log-normal k1=3.65, k2=3.65",
+      "hfo_rms_implementation": "SciPy uniform_filter1d versus epycom first sample of centered convolution"
+    },
+    "hfo_nominal_window": {
+      "detector_a_events": 48,
+      "detector_b_events": 53,
+      "matched_pairs": 37,
+      "a_matched_fraction": 0.7708333333333334,
+      "b_matched_fraction": 0.6981132075471698,
+      "event_jaccard": 0.578125,
+      "channel_count_spearman_rho": 0.8697162170732461,
+      "median_peak_delta_ms": 1.9999999999997797
+    },
+    "hfo_effective_window": {
+      "detector_a_events": 48,
+      "detector_b_events": 48,
+      "matched_pairs": 48,
+      "a_matched_fraction": 1.0,
+      "b_matched_fraction": 1.0,
+      "event_jaccard": 1.0,
+      "channel_count_spearman_rho": 1.0,
+      "median_peak_delta_ms": 1.9999999999997797
+    },
+    "spike": {
+      "detector_a_events": 210,
+      "detector_b_events": 109,
+      "matched_pairs": 82,
+      "a_matched_fraction": 0.3904761904761905,
+      "b_matched_fraction": 0.7522935779816514,
+      "event_jaccard": 0.3459915611814346,
+      "channel_count_spearman_rho": 0.9638554216867469,
+      "median_peak_delta_ms": 1.0000000000047748
+    }
+  },
+  {
+    "dataset": "OpenNeuro ds006107",
+    "version": "1.0.0",
+    "subject": "04",
+    "source_sha256": "0ee6c8d0b44752a84592dbab19f2976fdee07dccd99a589373e33dfe0531f2f2",
+    "sampling_hz": 1000,
+    "duration_s": 300,
+    "channels": [
+      "A1-AV",
+      "A10-AV",
+      "A19-AV",
+      "A28-AV",
+      "A37-AV",
+      "A46-AV",
+      "A55-AV",
+      "A64-AV"
+    ],
+    "annotation_files_used": false,
+    "implementations": {
+      "RealTimeHFO": "2a97d4d2b15b676a6ec9ee9ede9657f9e79eea46",
+      "RealTimeSpike": "b58f3d335926187525204409247b102dc3f0442e",
+      "epycom": "0.3",
+      "numpy": "2.3.5",
+      "scipy": "1.18.1"
+    },
+    "common_settings": {
+      "montage": "original EDF channels, no rereference",
+      "hfo_band_hz": [
+        80,
+        250
+      ],
+      "hfo_rms_window_ms": 5,
+      "hfo_threshold_sd": 5,
+      "hfo_merge_gap_ms": 10,
+      "hfo_duration_ms": [
+        6,
+        200
+      ],
+      "hfo_min_positive_peaks": 4,
+      "spike_band_hz": [
+        10,
+        60
+      ],
+      "spike_notch": "none",
+      "hfo_match_margin_ms": 10,
+      "spike_match_margin_ms": 100
+    },
+    "nonidentical_settings": {
+      "spike_current_threshold": "median envelope + 6 * 1.4826 * MAD",
+      "spike_janca_threshold": "log-normal k1=3.65, k2=3.65",
+      "hfo_rms_implementation": "SciPy uniform_filter1d versus epycom first sample of centered convolution"
+    },
+    "hfo_nominal_window": {
+      "detector_a_events": 11,
+      "detector_b_events": 14,
+      "matched_pairs": 9,
+      "a_matched_fraction": 0.8181818181818182,
+      "b_matched_fraction": 0.6428571428571429,
+      "event_jaccard": 0.5625,
+      "channel_count_spearman_rho": 0.9413160730419347,
+      "median_peak_delta_ms": 1.9999999999997797
+    },
+    "hfo_effective_window": {
+      "detector_a_events": 11,
+      "detector_b_events": 11,
+      "matched_pairs": 11,
+      "a_matched_fraction": 1.0,
+      "b_matched_fraction": 1.0,
+      "event_jaccard": 1.0,
+      "channel_count_spearman_rho": 1.0,
+      "median_peak_delta_ms": 1.9999999999953388
+    },
+    "spike": {
+      "detector_a_events": 185,
+      "detector_b_events": 99,
+      "matched_pairs": 96,
+      "a_matched_fraction": 0.518918918918919,
+      "b_matched_fraction": 0.9696969696969697,
+      "event_jaccard": 0.5106382978723404,
+      "channel_count_spearman_rho": 0.9461247469114746,
+      "median_peak_delta_ms": 1.0000000000047748
+    }
+  },
+  {
+    "dataset": "OpenNeuro ds006107",
+    "version": "1.0.0",
+    "subject": "06",
+    "source_sha256": "6e2ab55fe232487058f71a6fad076569fbe99342f8eb3e458cd23a98a1bb4d69",
+    "sampling_hz": 1000,
+    "duration_s": 300,
+    "channels": [
+      "A1-AV",
+      "A14-AV",
+      "A28-AV",
+      "A42-AV",
+      "A56-AV",
+      "B6-AV",
+      "B20-AV",
+      "B34-AV"
+    ],
+    "annotation_files_used": false,
+    "implementations": {
+      "RealTimeHFO": "2a97d4d2b15b676a6ec9ee9ede9657f9e79eea46",
+      "RealTimeSpike": "b58f3d335926187525204409247b102dc3f0442e",
+      "epycom": "0.3",
+      "numpy": "2.3.5",
+      "scipy": "1.18.1"
+    },
+    "common_settings": {
+      "montage": "original EDF channels, no rereference",
+      "hfo_band_hz": [
+        80,
+        250
+      ],
+      "hfo_rms_window_ms": 5,
+      "hfo_threshold_sd": 5,
+      "hfo_merge_gap_ms": 10,
+      "hfo_duration_ms": [
+        6,
+        200
+      ],
+      "hfo_min_positive_peaks": 4,
+      "spike_band_hz": [
+        10,
+        60
+      ],
+      "spike_notch": "none",
+      "hfo_match_margin_ms": 10,
+      "spike_match_margin_ms": 100
+    },
+    "nonidentical_settings": {
+      "spike_current_threshold": "median envelope + 6 * 1.4826 * MAD",
+      "spike_janca_threshold": "log-normal k1=3.65, k2=3.65",
+      "hfo_rms_implementation": "SciPy uniform_filter1d versus epycom first sample of centered convolution"
+    },
+    "hfo_nominal_window": {
+      "detector_a_events": 4,
+      "detector_b_events": 4,
+      "matched_pairs": 3,
+      "a_matched_fraction": 0.75,
+      "b_matched_fraction": 0.75,
+      "event_jaccard": 0.6,
+      "channel_count_spearman_rho": 0.7559289460184544,
+      "median_peak_delta_ms": 1.0000000000047748
+    },
+    "hfo_effective_window": {
+      "detector_a_events": 4,
+      "detector_b_events": 4,
+      "matched_pairs": 4,
+      "a_matched_fraction": 1.0,
+      "b_matched_fraction": 1.0,
+      "event_jaccard": 1.0,
+      "channel_count_spearman_rho": 1.0,
+      "median_peak_delta_ms": 1.5000000000000568
+    },
+    "spike": {
+      "detector_a_events": 147,
+      "detector_b_events": 62,
+      "matched_pairs": 56,
+      "a_matched_fraction": 0.38095238095238093,
+      "b_matched_fraction": 0.9032258064516129,
+      "event_jaccard": 0.3660130718954248,
+      "channel_count_spearman_rho": 0.7880090480744169,
+      "median_peak_delta_ms": 1.0000000000047748
+    }
+  }
+]

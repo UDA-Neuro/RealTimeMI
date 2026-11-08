@@ -109,6 +109,74 @@ The source datasets and algorithm descriptions are [HFO data](https://www.nemar.
 [original HFO study](https://www.nature.com/articles/s41598-017-13064-1.pdf),
 and the [IED dataset paper](https://www.nature.com/articles/s41597-024-04187-y.pdf).
 
+## Annotation-free interictal detector comparison
+
+The next comparison uses [Kuroda et al. OpenNeuro ds006107 v1.0.0](https://openneuro.org/datasets/ds006107/versions/1.0.0),
+mirrored at [NEMAR](https://www.nemar.org/dataset/on006107). This is 1 kHz
+slow-wave-sleep iEEG from epilepsy patients, used for interictal high-frequency
+analysis. The pinned manifest has no event annotation files. Subjects 01, 04,
+and 06 were selected before event analysis. The first 300 s and eight evenly
+spaced EDF channels per subject were analyzed, with no rereferencing. EDF
+SHA-256 digests are checked against the manifest. Raw data and output event
+CSVs remain under ignored `build/validation/`.
+
+The independent comparator is [epycom 0.3](https://pypi.org/project/epycom/):
+its RMS HFO detector and Janca spike detector. The benchmark script loads
+only those two unmodified detection functions because epycom's umbrella import
+requires an unrelated optional numba module. Both HFO implementations receive
+the same 80–250 Hz, fourth-order zero-phase Butterworth filtered signal. They
+use a 5 ms *effective* RMS window, mean + 5 SD threshold, gaps merged through
+10 ms, 6–200 ms duration, and at least four positive peaks. epycom's RMS
+helper returns the first value of a centered convolution: its nominal
+`window_size=5` uses three actual signal samples, while `window_size=9` uses
+five. The script reports both the nominal-5 and effective-5 comparisons. It
+also converts epycom's window-end timestamp to the same event boundary
+convention before applying the shared duration/peak rules. epycom's native
+RMS function only returns candidate spans; the common merge, duration, and
+peak rules are supplied by the comparison adapter. The effective-5 result
+tests RMS candidate parity under identical postprocessing, not agreement
+between two independently complete HFO classifiers.
+
+For spikes, both see the same EDF channel, 10–60 Hz band, and no notch. epycom
+0.3 hard-codes a 50 Hz notch despite exposing `line_freq`; the benchmark
+disables that optional notch in the comparator so the shared input remains
+unnotched. The remaining threshold definitions **cannot be set equal**:
+RealTimeSpike uses median + 6 robust SD of the Hilbert envelope, while Janca
+fits a log-normal envelope baseline with `k1=k2=3.65` by default. The spike
+comparison therefore measures agreement at stated, different thresholds.
+All detectors run once on each full 300 s segment; this checks algorithmic
+agreement, not the released application's 5 s incremental processing latency.
+
+| Subject, 300 s × 8 channels | HFO current / epycom effective-5 / matched | HFO nominal-5 matched | Spike current / Janca / matched |
+| --- | ---: | ---: | ---: |
+| 01 | 48 / 48 / 48 | 37 | 210 / 109 / 82 |
+| 04 | 11 / 11 / 11 | 9 | 185 / 99 / 96 |
+| 06 | 4 / 4 / 4 | 3 | 147 / 62 / 56 |
+| **Total** | **63 / 63 / 63** | **49** | **542 / 270 / 234** |
+
+Events are matched one-to-one on the same channel: HFO intervals may overlap
+within a 10 ms margin; spike peaks may differ by at most 100 ms. The full
+[machine-readable pilot](unannotated_pilot.json) records the source hashes,
+selected channels, package versions, and per-subject event Jaccard scores.
+No sensitivity, specificity, or false-positive rate can be inferred without
+independent event annotations. Eight channels per patient make this an initial
+implementation check, not an all-electrode or multi-center validation.
+
+To reproduce from a checkout with the RealTimeHFO and RealTimeSpike source
+trees under `build/`, run:
+
+```powershell
+python validation/download_public_subset.py kuroda --subject 01 --signal
+python validation/download_public_subset.py kuroda --subject 04 --signal
+python validation/download_public_subset.py kuroda --subject 06 --signal
+python -m pip install --no-deps --target build/validation/comparators/epycom_pkg epycom==0.3
+python validation/compare_unannotated.py 01 04 06 --seconds 300 --channels 8
+```
+
+The pilot ran with Python 3.12, NumPy 2.3.5, and SciPy 1.18.1. epycom's
+published dependency metadata requests NumPy <1.27; only the two audited
+detector modules were loaded and executed with the stated local versions.
+
 ## Next validation stage
 
 Treat these subjects as development/exploration data. Freeze any detector

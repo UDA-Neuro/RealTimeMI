@@ -16,10 +16,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MANIFESTS = ROOT / "build" / "validation" / "manifests"
 DATA = ROOT / "build" / "validation" / "data"
-DATASETS = {"spike": "nm000360", "hfo": "on003498"}
+DATASETS = {"spike": "nm000360", "hfo": "on003498", "kuroda": "on006107"}
 MANIFEST_URLS = {
     "nm000360": "https://data.nemar.org/nm000360/v1.0.2/manifest.json",
     "on003498": "https://data.nemar.org/on003498/v1.0.0/manifest.json",
+    "on006107": "https://data.nemar.org/on006107/v1.0.0/manifest.json",
 }
 
 
@@ -30,7 +31,7 @@ def select(entries: list[dict], dataset: str, subject: str, run: str | None) -> 
         if not run:
             raise ValueError("HFO data require --run")
         selected = [item for item in selected if f"run-{run}_" in item["path"]]
-    else:
+    elif dataset == "spike":
         interpretation = f"derivatives/sub-{subject}_task-sleep_events_interpretation.tsv"
         selected.extend(item for item in entries if item["path"] == interpretation)
     return selected
@@ -43,10 +44,11 @@ def download(item: dict, root: Path) -> Path:
     if destination.is_file() and destination.stat().st_size == size and _checksum_ok(destination, item):
         return destination
     partial = destination.with_name(destination.name + ".part")
-    if root.name == "on003498" and size > 16 * 1024 * 1024:
-        # The NEMAR mirror currently returns HTTP 500 for this large object.
-        # Ranged requests to the original OpenNeuro S3 object are reliable.
-        url = "https://s3.amazonaws.com/openneuro.org/ds003498/" + item["path"]
+    if root.name in ("on003498", "on006107") and size > 16 * 1024 * 1024:
+        # Large mirror objects may stall or return HTTP 500. Ranged requests
+        # to the original OpenNeuro S3 objects are resumable and verifiable.
+        openneuro_id = {"on003498": "ds003498", "on006107": "ds006107"}[root.name]
+        url = f"https://s3.amazonaws.com/openneuro.org/{openneuro_id}/" + item["path"]
         position = partial.stat().st_size if partial.is_file() else 0
         if position > size:
             partial.unlink()
@@ -84,6 +86,8 @@ def _checksum_ok(path: Path, item: dict) -> bool:
     algorithm = item["checksum_algorithm"]
     if algorithm == "md5":
         digest = hashlib.md5()
+    elif algorithm == "sha256":
+        digest = hashlib.sha256()
     elif algorithm == "git":
         digest = hashlib.sha1()
         digest.update(f"blob {path.stat().st_size}\0".encode())
