@@ -16,16 +16,22 @@ import numpy as np
 from realtimemi.viewer import BesaBlockSource, WaveformChunk, WaveformPlayer
 from realtimemi.live_mi import LiveMIPlanner, LiveMIResult, compute_live_mi_window
 from realtimemi.live_mi_store import LiveMIResultStore
+from realtimemi.display_processing import (BANDPASS, NOTCH, REFERENCE, SENSITIVITY,
+                                           prepare_display)
 
 
 class EEGViewer:
     def __init__(self, root: tk.Tk | tk.Toplevel, output_dir: str | Path | None = None):
         self.root = root
         root.title("RealTimeMI — BESA EEG Viewer")
-        root.geometry("1100x700")
+        root.geometry("1180x760")
         self.path = tk.StringVar()
         self.mode = tk.StringVar(value="follow")
         self.channel = tk.StringVar(value="1")
+        self.bandpass = tk.StringVar(value="Off")
+        self.notch = tk.StringVar(value="Off")
+        self.reference = tk.StringVar(value="Original")
+        self.sensitivity = tk.StringVar(value="Auto")
         self.status = tk.StringVar(value="Choose a BESA file, then start the viewer.")
         self.position = tk.StringVar(value="Display --")
         self.events: queue.Queue = queue.Queue()
@@ -70,14 +76,26 @@ class EEGViewer:
         self.channel_box.pack(side="left")
         self.channel_box.bind("<<ComboboxSelected>>", self.change_channel)
         ttk.Label(controls, textvariable=self.position).pack(side="left", padx=(24, 0))
+        display_controls = ttk.Frame(frame)
+        display_controls.grid(row=3, column=0, columnspan=2, sticky="w", pady=(0, 8))
+        for title, variable, choices, width in (
+                ("Sensitivity", self.sensitivity, SENSITIVITY, 8),
+                ("Bandpass", self.bandpass, BANDPASS, 13),
+                ("Reference", self.reference, REFERENCE, 23),
+                ("Notch", self.notch, NOTCH, 8)):
+            ttk.Label(display_controls, text=title).pack(side="left", padx=(0, 5))
+            box = ttk.Combobox(display_controls, textvariable=variable,
+                               values=list(choices), state="readonly", width=width)
+            box.pack(side="left", padx=(0, 18))
+            box.bind("<<ComboboxSelected>>", lambda _: self.draw())
         ttk.Label(frame, textvariable=self.status, wraplength=1000).grid(
-            row=3, column=0, columnspan=2, sticky="w", pady=(0, 8))
+            row=4, column=0, columnspan=2, sticky="w", pady=(0, 8))
         self.canvas = tk.Canvas(frame, background="white", highlightthickness=1,
                                 highlightbackground="#c5cbd0")
-        self.canvas.grid(row=4, column=0, columnspan=2, sticky="nsew")
+        self.canvas.grid(row=5, column=0, columnspan=2, sticky="nsew")
         self.canvas.bind("<Configure>", lambda _: self.draw())
         mi_panel = ttk.LabelFrame(frame, text="Modulation Index · 3–4 Hz phase × 80–250 Hz amplitude", padding=8)
-        mi_panel.grid(row=5, column=0, columnspan=2, sticky="nsew", pady=(8, 0))
+        mi_panel.grid(row=6, column=0, columnspan=2, sticky="nsew", pady=(8, 0))
         self.mi_table = ttk.Treeview(mi_panel, columns=("channel", "mi", "window", "state"),
                                      show="headings", height=7, selectmode="browse")
         for key, title, width in (("channel", "Channel", 80), ("mi", "Latest MI", 90),
@@ -96,11 +114,11 @@ class EEGViewer:
                                                                     sticky="w")
         mi_panel.columnconfigure(1, weight=1)
         mi_panel.rowconfigure(0, weight=1)
-        ttk.Label(frame, text="Waveform display: 1 kHz antialias resampling; each channel autoscaled in ADC counts.").grid(
-            row=6, column=0, columnspan=2, sticky="w", pady=(7, 0))
+        ttk.Label(frame, text="Display filters and reference affect waveforms only. MI uses original recorded channels. Sensitivity is relative to ADC-count autoscale.").grid(
+            row=7, column=0, columnspan=2, sticky="w", pady=(7, 0))
         frame.columnconfigure(0, weight=1)
-        frame.rowconfigure(4, weight=3)
-        frame.rowconfigure(5, weight=2)
+        frame.rowconfigure(5, weight=3)
+        frame.rowconfigure(6, weight=2)
         root.after(100, self.poll_events)
         root.after(100, self.tick)
         root.protocol("WM_DELETE_WINDOW", self.close)
@@ -395,7 +413,13 @@ class EEGViewer:
         width = max(self.canvas.winfo_width(), 500)
         height = max(self.canvas.winfo_height(), 350)
         left, right, top, bottom = 105, width - 20, 25, height - 35
-        channels = chunk.data.shape[1]
+        display, labels = prepare_display(chunk.data, chunk.labels,
+                                          bandpass=self.bandpass.get(), notch=self.notch.get(),
+                                          reference=self.reference.get())
+        channels = display.shape[1]
+        if channels == 0:
+            self.canvas.create_text(30, 30, anchor="nw", text="Bipolar reference needs at least two displayed channels.")
+            return
         lane = (bottom - top) / channels
         origin = self.player.origin_s if self.player.origin_s is not None else chunk.start_s
         window_start = max(origin, chunk.end_s - self.player.window_s)
@@ -405,22 +429,23 @@ class EEGViewer:
         self.canvas.create_text(right, bottom + 8, anchor="ne", text=f"{window_end:.1f} s")
         cursor_x = left + (right - left) * (chunk.end_s - window_start) / self.player.window_s
         self.canvas.create_line(cursor_x, top, cursor_x, bottom, fill="#b7c3ce", dash=(3, 3))
-        bins = min(max(right - left, 1), 900, len(chunk.data))
-        step = max(1, (len(chunk.data) + bins - 1) // bins)
-        starts = np.arange(0, len(chunk.data), step)
-        sample_centers = np.minimum(starts + step / 2, len(chunk.data) - 1)
+        bins = min(max(right - left, 1), 900, len(display))
+        step = max(1, (len(display) + bins - 1) // bins)
+        starts = np.arange(0, len(display), step)
+        sample_centers = np.minimum(starts + step / 2, len(display) - 1)
         x = left + (right - left) * (
             chunk.start_s + sample_centers / 1000 - window_start) / self.player.window_s
-        for index, label in enumerate(chunk.labels):
+        gain = SENSITIVITY[self.sensitivity.get()]
+        for index, label in enumerate(labels):
             baseline = top + (index + 0.5) * lane
             self.canvas.create_line(left, baseline, right, baseline, fill="#e3e7eb")
             self.canvas.create_text(left - 8, baseline, anchor="e", text=label, fill="#27333d")
-            values = chunk.data[:, index].astype(np.float64)
+            values = display[:, index]
             finite = values[np.isfinite(values)]
             if not len(finite):
                 continue
             center = float(np.median(finite))
-            scale = float(np.percentile(np.abs(finite - center), 99)) or 1.0
+            scale = (float(np.percentile(np.abs(finite - center), 99)) or 1.0) / gain
             clean = np.where(np.isfinite(values), values, center)
             low = np.minimum.reduceat(clean, starts)
             high = np.maximum.reduceat(clean, starts)

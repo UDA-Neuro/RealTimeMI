@@ -71,7 +71,14 @@ latest complete BESA data block, then checks for newly committed blocks every
 in a rolling ten-second window, so the waveform moves continuously across
 BESA block boundaries. It shows eight channels at a time with recorded channel labels;
 the **First channel** menu selects another group. The waveform display is
-antialias resampled to 1 kHz and autoscaled per channel in ADC counts.
+antialias resampled to 1 kHz. **Sensitivity** changes the relative display
+gain from 0.25× to 8× around each channel's ADC-count autoscale. **Bandpass**
+offers off, 0.5–70, 1–100, and 3–250 Hz; **Notch** offers off, 50, and 60 Hz.
+**Reference** offers original channels, the common average of the displayed
+channels, or adjacent bipolar pairs. Filters are zero-phase and recomputed
+over the visible waveform; brief edge transients are possible. These controls
+change only the displayed waveforms. The automatic MI remains calculated from
+the original BESA channels with its fixed 3–4 Hz and 80–250 Hz bands.
 
 **Replay saved file (1×)** displays a finished BESA recording at its recorded
 speed for setup and testing. This is playback, not acquisition. File-follow
