@@ -30,6 +30,9 @@ def select(entries: list[dict], dataset: str, subject: str, run: str | None) -> 
         if not run:
             raise ValueError("HFO data require --run")
         selected = [item for item in selected if f"run-{run}_" in item["path"]]
+    else:
+        interpretation = f"derivatives/sub-{subject}_task-sleep_events_interpretation.tsv"
+        selected.extend(item for item in entries if item["path"] == interpretation)
     return selected
 
 
@@ -115,3 +118,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
